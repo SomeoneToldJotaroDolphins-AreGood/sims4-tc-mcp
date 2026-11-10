@@ -3,9 +3,8 @@
 ## Reporting a vulnerability
 
 Please **do not** open a public issue for security problems. Use GitHub's
-"Report a vulnerability" (Security → Advisories) on this repository, or email
-the maintainers listed in the repository profile. We aim to acknowledge
-reports within a few days.
+"Report a vulnerability" flow (Security → Advisories) on this repository. We
+aim to acknowledge reports within a few days.
 
 ## Threat model
 

@@ -36,7 +36,7 @@ Built on the official [`mcp`](https://pypi.org/project/mcp/) Python SDK,
 ## Install
 
 ```bash
-git clone https://github.com/<owner>/sims4-tc-mcp.git
+git clone https://github.com/SomeoneToldJotaroDolphins-AreGood/sims4-tc-mcp.git
 cd sims4-tc-mcp
 uv sync
 ```

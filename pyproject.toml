@@ -25,8 +25,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/<owner>/sims4-tc-mcp"
-Issues = "https://github.com/<owner>/sims4-tc-mcp/issues"
+Repository = "https://github.com/SomeoneToldJotaroDolphins-AreGood/sims4-tc-mcp"
+Issues = "https://github.com/SomeoneToldJotaroDolphins-AreGood/sims4-tc-mcp/issues"
 
 [project.scripts]
 sims4-tc-mcp = "sims4_mcp.server:main"
