@@ -389,15 +389,25 @@ def status() -> int:
 # ---------------------------------------------------------------------------
 
 
-def _load_or_build(host: str = "0.0.0.0") -> dict:
+def _apply_overrides(config: dict,
+                     overrides: dict[str, str | None] | None) -> dict:
+    paths = config.setdefault("paths", {})
+    for key, value in (overrides or {}).items():
+        if value:
+            paths[key] = value
+    return config
+
+
+def _load_or_build(host: str = "0.0.0.0",
+                   overrides: dict[str, str | None] | None = None) -> dict:
     if CONFIG_FILE.exists():
         try:
             config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
             if isinstance(config, dict) and config.get("token"):
-                return config
+                return _apply_overrides(config, overrides)
         except ValueError:
             pass
-    config = build_config(host=host)
+    config = build_config(host=host, overrides=overrides)
     write_config(config)
     write_env_file(config)
     return config
@@ -422,14 +432,15 @@ def _dashboard(console, config: dict) -> None:
     console.print(table)
 
 
-def tui(host: str = "0.0.0.0") -> int:
+def tui(host: str = "0.0.0.0",
+        overrides: dict[str, str | None] | None = None) -> int:
     """Interactive menu for non-technical users."""
     from rich.console import Console
     from rich.panel import Panel
     from rich.prompt import Prompt
 
     console = Console()
-    config = _load_or_build(host)
+    config = _load_or_build(host, overrides)
     choices = ["1", "2", "3", "4", "5", "6", "7", "q"]
 
     while True:
@@ -509,9 +520,10 @@ def _service_active() -> bool:
     return result.returncode == 0
 
 
-def auto(host: str = "0.0.0.0") -> int:
+def auto(host: str = "0.0.0.0",
+         overrides: dict[str, str | None] | None = None) -> int:
     """Zero-question path: detect, configure, run in the background."""
-    config = _load_or_build(host)
+    config = _load_or_build(host, overrides)
     write_config(config)
     write_env_file(config)
     print(summary(config), flush=True)
@@ -564,13 +576,6 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if args.status:
-        return status()
-    if args.tui:
-        return tui(host=args.host)
-    if args.auto:
-        return auto(host=args.host)
-
     overrides = {
         "SIMS4_USER_DIR": args.user_dir,
         "SIMS4_MODS_DIR": args.mods_dir,
@@ -578,6 +583,13 @@ def main(argv: list[str] | None = None) -> int:
         "SIMS4_TDESC_DIR": args.tdesc_dir,
         "SIMS4_DECOMPILED_SCRIPTS_DIR": args.scripts_dir,
     }
+    if args.status:
+        return status()
+    if args.tui:
+        return tui(host=args.host, overrides=overrides)
+    if args.auto:
+        return auto(host=args.host, overrides=overrides)
+
     config = build_config(host=args.host, port=args.port, token=args.token,
                           overrides=overrides)
     write_config(config)
