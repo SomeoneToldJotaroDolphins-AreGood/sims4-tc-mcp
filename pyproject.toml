@@ -1,15 +1,32 @@
 [project]
 name = "sims4-tc-mcp"
 version = "0.1.0"
-description = "Production-grade MCP server for heavy script mods and Total Conversions for The Sims 4"
+description = "MCP server for The Sims 4 script mods and total conversions"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
+authors = [{ name = "sims4-tc-mcp contributors" }]
+keywords = ["sims4", "modding", "mcp", "model-context-protocol", "dbpf"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment :: Simulation",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "mcp[cli]>=1.2.0",
     "lxml>=5.0",
     "pydantic>=2.5",
     "rich>=13.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/<owner>/sims4-tc-mcp"
+Issues = "https://github.com/<owner>/sims4-tc-mcp/issues"
 
 [project.scripts]
 sims4-tc-mcp = "sims4_mcp.server:main"

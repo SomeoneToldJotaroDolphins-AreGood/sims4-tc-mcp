@@ -1,11 +1,15 @@
 # sims4-tc-mcp
 
-Production-grade **Model Context Protocol** server for building, inspecting,
-packaging and debugging **heavy script mods (`.ts4script`)** and
-**large-scale Total Conversions** for *The Sims 4*.
+A **Model Context Protocol** server for building, inspecting, packaging and
+debugging **script mods (`.ts4script`)** and **total conversions** for
+*The Sims 4*.
 
-Built on the official `mcp` Python SDK (mcp ≥ 2.x; `FastMCP` is exposed as
-`MCPServer` — same `@mcp.tool()` / `@mcp.resource()` / `@mcp.prompt()` API),
+Point any MCP-capable agent (OpenCode, Claude Desktop, Cursor, …) at it and
+it can hash resources, read/write `.package` files, search vanilla tuning,
+validate Python 3.7 for the game's interpreter, patch catalog flags, package
+`.ts4script` zips, and parse `lastException` tracebacks.
+
+Built on the official [`mcp`](https://pypi.org/project/mcp/) Python SDK,
 `lxml`, `pydantic` v2 and SQLite FTS5.
 
 ## Features
@@ -22,31 +26,44 @@ Built on the official `mcp` Python SDK (mcp ≥ 2.x; `FastMCP` is exposed as
 | `catalog/` | CASP `0x034AEECB` / COBJ `0x319E4F1D` / OBJD `0xC0DB5AE7` flag patchers + batch overrides |
 | `live_bridge/` | In-game TCP bridge generator, outbound client, `lastException` diagnostics |
 
-## Quick start
+## Requirements
+
+- Python **3.11+** (the package pins 3.12 through `uv`)
+- [`uv`](https://docs.astral.sh/uv/)
+- Linux or macOS; the stdio server also runs on Windows, the auto-setup
+  helpers are POSIX-oriented (systemd/desktop launcher)
+
+## Install
 
 ```bash
-# uv is the only prerequisite
-pip install --user uv          # or: curl -LsSf https://astral.sh/uv/install.sh | sh
+git clone https://github.com/<owner>/sims4-tc-mcp.git
+cd sims4-tc-mcp
+uv sync
+```
 
-cd Sims4Modding
-uv sync                        # creates .venv with Python 3.12
-uv run pytest                  # 107 tests
-uv run sims4-tc-mcp            # stdio MCP server
+Run the test suite (107 tests):
+
+```bash
+uv run pytest
 ```
 
 ## One-click setup
 
 `sims4-tc-mcp-setup` finds your game folder, creates a bearer token, writes
-a config file, and starts the server — no environment variables needed.
+a config file, and starts the server — no environment variables needed:
 
 ```bash
-uv run sims4-tc-mcp-setup --tui      # friendly menu (recommended)
+uv run sims4-tc-mcp-setup --tui      # interactive menu (recommended)
 uv run sims4-tc-mcp-setup --auto     # zero questions, background service
 uv run sims4-tc-mcp-setup --status   # what was detected / is it running?
-uv run sims4-tc-mcp-setup --launcher # adds a desktop icon that opens the TUI
+uv run sims4-tc-mcp-setup --launcher # add a desktop icon that opens the TUI
 ```
 
-What it auto-detects:
+The TUI shows detected paths, lets you start the server in the foreground or
+as a systemd user service, change the port, and print a ready-to-paste client
+config.
+
+Auto-detected game folders:
 
 | Installation | User folder |
 |---|---|
@@ -60,16 +77,41 @@ It also picks up `~/sims4/extracted/tuning`, `~/sims4/extracted/tdesc` and
 `~/sims4/decompiled` when they exist. Anything missing can be overridden
 with `--user-dir/--mods-dir/--tuning-dir/--tdesc-dir/--scripts-dir`.
 
-Settings are stored in `~/.config/sims4-tc-mcp/config.json` (0600) with the
-token in `~/.config/sims4-tc-mcp/token`. Environment variables still win over
-the file, so containers/CI keep working the old way. `--tui` builds a
-systemd **user** unit on request, and `--auto` installs and starts it
-immediately.
+Settings live in `~/.config/sims4-tc-mcp/config.json` (mode 0600) with the
+token in `~/.config/sims4-tc-mcp/token`. Environment variables still take
+precedence, so containers and CI keep working.
+
+## Manual run
+
+**stdio** (the default; what desktop MCP clients spawn):
+
+```bash
+uv run sims4-tc-mcp
+```
+
+Nothing is printed — stdio is a silent JSON-RPC pipe. To poke at it:
+
+```bash
+uv run mcp dev src/sims4_mcp/server.py
+```
+
+**HTTP** (for remote clients):
+
+```bash
+SIMS4_MCP_TRANSPORT=streamable-http \
+SIMS4_MCP_HOST=0.0.0.0 \
+SIMS4_MCP_PORT=7348 \
+SIMS4_MCP_AUTH_TOKEN="$(openssl rand -hex 24)" \
+uv run sims4-tc-mcp
+```
+
+Binding any non-loopback interface **without** `SIMS4_MCP_AUTH_TOKEN` refuses
+to start. Loopback binds may run token-less.
 
 ## Configuration
 
-All paths are optional. Without game files the server still works; tools
-that need an index report `unconfigured` with a hint instead of failing.
+All paths are optional. Without game files the server still works; tools that
+need an index report `unconfigured` with a hint instead of failing.
 
 | Variable | Purpose |
 |---|---|
@@ -78,46 +120,39 @@ that need an index report `unconfigured` with a hint instead of failing.
 | `SIMS4_EXTRACTED_TUNING_DIR` | Extracted Maxis XML tuning (Sims 4 Studio / Lot51) for FTS + graph |
 | `SIMS4_TDESC_DIR` | Extracted `.tdesc` schema files |
 | `SIMS4_DECOMPILED_SCRIPTS_DIR` | Decompiled game Python (`base`, `core`, `simulation`, `protocolbuffers`) |
-| `SIMS4_MCP_CACHE_DIR` | Override the SQLite cache root (default `~/.cache/sims4-tc-mcp`) |
+| `SIMS4_MCP_CACHE_DIR` | SQLite cache root (default `~/.cache/sims4-tc-mcp`) |
 | `SIMS4_MCP_TRANSPORT` | `stdio` (default), `streamable-http` or `sse` |
 | `SIMS4_MCP_HOST` / `SIMS4_MCP_PORT` | HTTP bind (default `127.0.0.1:7348`) |
 | `SIMS4_MCP_AUTH_TOKEN` | Bearer token; **required** for any non-loopback bind |
+| `SIMS4_MCP_CONFIG` | Config file override (default `~/.config/sims4-tc-mcp/config.json`) |
 
-## Running the server on the game machine (remote MCP)
+Build the indexes once the data is available:
 
-Keep the game files on the desktop and connect from another machine. The
-one-click path is just:
+```jsonc
+// tools: rebuild_indexes(tuning=true, python_api=true, tdesc=true, force=false)
+```
+
+## Remote use (game PC → laptop)
+
+Run the server where the game and its files live, connect from anywhere on
+the LAN:
 
 ```bash
 # on the game machine
 uv run sims4-tc-mcp-setup --tui     # option 2 installs + starts the service
 ```
 
-Manual equivalent:
+Then open the port on that machine (Fedora example):
 
 ```bash
-# on the game machine
-SIMS4_MCP_TRANSPORT=streamable-http \
-SIMS4_MCP_HOST=0.0.0.0 SIMS4_MCP_PORT=7348 \
-SIMS4_MCP_AUTH_TOKEN="$(openssl rand -hex 24)" \
-SIMS4_USER_DIR="$HOME/.local/share/feral-interactive/TheSims4/VFS/Prefs/Electronic Arts/The Sims 4" \
-uv run sims4-tc-mcp
+sudo firewall-cmd --add-port=7348/tcp --permanent && sudo firewall-cmd --reload
 ```
 
-Safety rules built in: binding a LAN interface without a token **refuses
-to start**; loopback binds may run token-less. Open the port in the
-desktop firewall (`sudo firewall-cmd --add-port=7348/tcp --permanent &&
-sudo firewall-cmd --reload` on Fedora). For Proton installs the user dir
-lives under the launcher's prefix (`feral-interactive` above for the
-native launcher, `~/.steam/root/compatibilitytools.d/.../drive_c/users/
-steamuser/Documents/Electronic Arts/The Sims 4` for Steam Play — check
-with `find ~ -type d -name "The Sims 4" 2>/dev/null`).
+The token is plain HTTP on the LAN; use an SSH tunnel if you cross untrusted
+networks:
 
-
-Build the indexes once the data is available:
-
-```jsonc
-// tools: rebuild_indexes(tuning=true, python_api=true, tdesc=true, force=false)
+```bash
+ssh -L 7348:127.0.0.1:7348 user@game-pc
 ```
 
 ## OpenCode configuration
@@ -133,21 +168,16 @@ Servers go under `mcp.servers`:
       // local stdio variant (server on the same machine)
       "sims4-tc-mcp": {
         "type": "local",
-        "command": [
-          "uv", "run", "--directory", "/home/baris/Sims4Modding", "sims4-tc-mcp"
-        ],
+        "command": ["uv", "run", "--directory", "/path/to/sims4-tc-mcp", "sims4-tc-mcp"],
         "environment": {
-          "SIMS4_EXTRACTED_TUNING_DIR": "~/sims4/extracted/tuning",
-          "SIMS4_TDESC_DIR": "~/sims4/extracted/tdesc",
-          "SIMS4_DECOMPILED_SCRIPTS_DIR": "~/sims4/decompiled",
           "SIMS4_USER_DIR": "~/Documents/Electronic Arts/The Sims 4",
           "SIMS4_MODS_DIR": "~/Documents/Electronic Arts/The Sims 4/Mods"
         }
       },
-      // remote variant (server on the game desktop, client elsewhere)
+      // remote variant (server on the game PC)
       "sims4-tc-mcp-remote": {
         "type": "remote",
-        "url": "http://192.168.1.3:7348/mcp",
+        "url": "http://192.168.1.50:7348/mcp",
         "headers": { "Authorization": "Bearer <token>" },
         "timeout": { "startup": 15000 }
       }
@@ -156,6 +186,8 @@ Servers go under `mcp.servers`:
 }
 ```
 
+`uv run sims4-tc-mcp-setup --print-client-config` prints exactly this block
+with your detected address and token filled in.
 
 ## Tools
 
@@ -201,23 +233,43 @@ build_package("/path/MyMod.package", "/path/project")
   generic and round-trip safe, while XML auto-compilation supports the
   registry in `simdata/compilers.py` (extend with `register()`).
 - **`.pyc` files**: only 16-byte CPython 3.7 headers (magic 3394) can be
-  produced on a newer host. `.ts4script` ships `.py` source, which the
-  game compiles itself — that is the supported path.
+  produced on a newer host. `.ts4script` ships `.py` source, which the game
+  compiles itself — that is the supported path.
 - **Catalog flags**: CASP `AllowForRandom` uses the officially documented
-  partFlags bit 2. COBJ flag-word semantics are partially undocumented;
-  the patcher exposes configurable word/bit targets (CASP conventions by
-  default) and preserves every other byte.
-- **Live bridge** binds loopback only and requires a shared token; `exec`
-  is disabled unless explicitly allowed on both sides.
+  partFlags bit 2. COBJ flag-word semantics are partially undocumented; the
+  patcher exposes configurable word/bit targets (CASP conventions by default)
+  and preserves every other byte.
+- **Live bridge** binds loopback only and requires a shared token; `exec` is
+  disabled unless explicitly allowed on both sides.
 
-## Tests
+## Development
 
 ```bash
-uv run pytest -q          # 107 tests
+uv sync
+uv run pytest -q              # 107 tests
 uv run pytest -v tests/test_dbpf.py
 ```
 
 Coverage: FNV known answers, DBPF round-trips across flag combinations,
 STBL v5 + 18 locales, SimData codec + compilers, tuning FTS + graph,
 gatekeeper matrices, pyc headers, injector templates, packager,
-CASP/COBJ/OBJD patching, and every MCP tool (in-process client included).
+CASP/COBJ/OBJD patching, HTTP transport + bearer auth, setup detection, and
+every MCP tool (in-process client included).
+
+## Security
+
+The HTTP transport exposes file-reading and file-writing tools. It requires a
+bearer token for every request and refuses to bind a non-loopback interface
+without one. Never commit the token (`.gitignore` covers the common names).
+
+Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Disclaimer
+
+Not affiliated with or endorsed by Electronic Arts, Maxis, or Mod The Sims.
+*The Sims* is a trademark of Electronic Arts Inc. This project ships no game
+assets; you need your own legally installed copy of the game.

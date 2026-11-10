@@ -16,3 +16,11 @@ wheels/
 .coverage
 htmlcov/
 .DS_Store
+
+# Local secrets / generated config
+.env
+.env.*
+*token*
+sims4-tc-mcp/config.json
+config.local.json
+
