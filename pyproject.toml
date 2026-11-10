@@ -1,0 +1,30 @@
+[project]
+name = "sims4-tc-mcp"
+version = "0.1.0"
+description = "Production-grade MCP server for heavy script mods and Total Conversions for The Sims 4"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp[cli]>=1.2.0",
+    "lxml>=5.0",
+    "pydantic>=2.5",
+]
+
+[project.scripts]
+sims4-tc-mcp = "sims4_mcp.server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv.build-backend]
+module-name = "sims4_mcp"
+module-root = "src"
