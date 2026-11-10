@@ -75,3 +75,14 @@ Status: 🔲 todo · 🔄 in progress · ✅ done
 - [x] tests/test_server_tools.py
 - [x] `uv run pytest` all green (86 passed)
 - [x] README.md (setup, env vars, opencode.jsonc)
+
+## Phase 12 — Remote transport & one-click setup
+- [x] `streamable-http` transport + bearer-token middleware
+- [x] LAN bind refuses to start without `SIMS4_MCP_AUTH_TOKEN`
+- [x] `tests/test_http_transport.py` (auth matrix, tool round-trip)
+- [x] `sims4_mcp/setup.py`: Proton/EA/Lutris/Flatpak folder detection
+- [x] Saved config (`~/.config/sims4-tc-mcp/config.json`) with env override
+- [x] Token generation/0600 storage, free-port selection, LAN URL
+- [x] systemd user unit + desktop launcher (`.desktop`)
+- [x] `--tui` (rich menu), `--auto`, `--status`, `--print-client-config`
+- [x] `tests/test_setup.py` (107 total tests)

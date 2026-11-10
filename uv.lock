@@ -970,6 +970,7 @@ dependencies = [
     { name = "lxml" },
     { name = "mcp", extra = ["cli"] },
     { name = "pydantic" },
+    { name = "rich" },
 ]
 
 [package.dev-dependencies]
@@ -982,6 +983,7 @@ requires-dist = [
     { name = "lxml", specifier = ">=5.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
     { name = "pydantic", specifier = ">=2.5" },
+    { name = "rich", specifier = ">=13.0" },
 ]
 
 [package.metadata.requires-dev]

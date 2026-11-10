@@ -8,10 +8,12 @@ dependencies = [
     "mcp[cli]>=1.2.0",
     "lxml>=5.0",
     "pydantic>=2.5",
+    "rich>=13.0",
 ]
 
 [project.scripts]
 sims4-tc-mcp = "sims4_mcp.server:main"
+sims4-tc-mcp-setup = "sims4_mcp.setup:main"
 
 [dependency-groups]
 dev = [

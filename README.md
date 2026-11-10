@@ -30,9 +30,41 @@ pip install --user uv          # or: curl -LsSf https://astral.sh/uv/install.sh 
 
 cd Sims4Modding
 uv sync                        # creates .venv with Python 3.12
-uv run pytest                  # 92 tests
+uv run pytest                  # 107 tests
 uv run sims4-tc-mcp            # stdio MCP server
 ```
+
+## One-click setup
+
+`sims4-tc-mcp-setup` finds your game folder, creates a bearer token, writes
+a config file, and starts the server — no environment variables needed.
+
+```bash
+uv run sims4-tc-mcp-setup --tui      # friendly menu (recommended)
+uv run sims4-tc-mcp-setup --auto     # zero questions, background service
+uv run sims4-tc-mcp-setup --status   # what was detected / is it running?
+uv run sims4-tc-mcp-setup --launcher # adds a desktop icon that opens the TUI
+```
+
+What it auto-detects:
+
+| Installation | User folder |
+|---|---|
+| Steam Play / Proton | `~/.steam/steam/steamapps/compatdata/1222670/pfx/drive_c/users/*/Documents/Electronic Arts/The Sims 4` |
+| Steam (Flatpak) | `~/.var/app/com.valvesoftware.Steam/.local/share/Steam/.../1222670/...` |
+| EA app / native | `~/.local/share/feral-interactive/TheSims4/VFS/Prefs/Electronic Arts/The Sims 4` |
+| Wine / Lutris | `~/Games/*/drive_c/users/*/Documents/Electronic Arts/The Sims 4` |
+| Native Windows-style | `~/Documents/Electronic Arts/The Sims 4` |
+
+It also picks up `~/sims4/extracted/tuning`, `~/sims4/extracted/tdesc` and
+`~/sims4/decompiled` when they exist. Anything missing can be overridden
+with `--user-dir/--mods-dir/--tuning-dir/--tdesc-dir/--scripts-dir`.
+
+Settings are stored in `~/.config/sims4-tc-mcp/config.json` (0600) with the
+token in `~/.config/sims4-tc-mcp/token`. Environment variables still win over
+the file, so containers/CI keep working the old way. `--tui` builds a
+systemd **user** unit on request, and `--auto` installs and starts it
+immediately.
 
 ## Configuration
 
@@ -53,7 +85,15 @@ that need an index report `unconfigured` with a hint instead of failing.
 
 ## Running the server on the game machine (remote MCP)
 
-Keep the game files on the desktop and connect from another machine:
+Keep the game files on the desktop and connect from another machine. The
+one-click path is just:
+
+```bash
+# on the game machine
+uv run sims4-tc-mcp-setup --tui     # option 2 installs + starts the service
+```
+
+Manual equivalent:
 
 ```bash
 # on the game machine
@@ -173,7 +213,7 @@ build_package("/path/MyMod.package", "/path/project")
 ## Tests
 
 ```bash
-uv run pytest -q          # 92 tests
+uv run pytest -q          # 107 tests
 uv run pytest -v tests/test_dbpf.py
 ```
 

@@ -533,7 +533,7 @@ def run_http() -> None:
     if require:
         app = _bearer_middleware(app, token)
     print(f"sims4-tc-mcp: streamable-http on {host}:{port}/mcp "
-          f"(auth={'bearer' if require else 'none'})")
+          f"(auth={'bearer' if require else 'none'})", flush=True)
     import uvicorn
     uvicorn.run(app, host=host, port=port,
                 log_level=mcp.settings.log_level.lower())
