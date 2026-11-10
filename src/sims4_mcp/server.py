@@ -5,11 +5,21 @@ debugging The Sims 4 script mods and total conversions.
 
 Run with ``sims4-tc-mcp`` (stdio transport) or
 ``uv run mcp dev src/sims4_mcp/server.py``.
+
+For a remote (LAN) setup, run the HTTP transport on the game machine::
+
+    SIMS4_MCP_TRANSPORT=streamable-http \\
+    SIMS4_MCP_HOST=0.0.0.0 SIMS4_MCP_PORT=7348 \\
+    SIMS4_MCP_AUTH_TOKEN=<secret> uv run sims4-tc-mcp
+
+Clients then connect with ``Authorization: Bearer <secret>``.
 """
 
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 from pathlib import Path
 from typing import Literal, Optional
@@ -456,8 +466,88 @@ def total_conversion_workflow(mod_name: str, creator: str = "creator") -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Network transport (streamable-http + bearer token)
+# ---------------------------------------------------------------------------
+
+
+def _bearer_middleware(app, token: str):
+    """Wrap a Starlette app so every request needs ``Authorization: Bearer``."""
+    from starlette.responses import PlainTextResponse
+    from starlette.types import ASGIApp, Receive, Scope, Send
+
+    digest = hashlib.sha256(token.encode("utf-8")).digest()
+
+    class BearerAuth:
+        def __init__(self, inner: ASGIApp) -> None:
+            self._inner = inner
+
+        async def __call__(self, scope: Scope, receive: Receive,
+                           send: Send) -> None:
+            if scope["type"] not in ("http", "websocket"):
+                await self._inner(scope, receive, send)
+                return
+            headers = dict(scope.get("headers") or [])
+            raw = headers.get(b"authorization", b"").decode("latin-1")
+            scheme, _, value = raw.partition(" ")
+            ok = scheme.lower() == "bearer" and hmac.compare_digest(
+                hashlib.sha256(value.encode("utf-8")).digest(), digest)
+            if not ok:
+                response = PlainTextResponse("Unauthorized", status_code=401,
+                                             headers={"WWW-Authenticate":
+                                                      "Bearer"})
+                await response(scope, receive, send)
+                return
+            await self._inner(scope, receive, send)
+
+    return BearerAuth(app)
+
+
+def run_http() -> None:
+    """Serve MCP over streamable-http for remote clients (e.g. OpenCode on
+    another machine)."""
+    host = config.http_host()
+    port = config.http_port()
+    token = config.auth_token()
+    require = config.requires_auth(host)
+    if require and not token:
+        raise RuntimeError("auth required but SIMS4_MCP_AUTH_TOKEN is unset")
+
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    if host in ("127.0.0.1", "localhost", "::1"):
+        # Loopback: keep DNS-rebinding protection with a local allow-list.
+        security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=[f"{host}:*", "127.0.0.1:*", "localhost:*",
+                           "[::1]:*"],
+            allowed_origins=[f"http://{host}:*", "http://127.0.0.1:*",
+                             "http://localhost:*", "http://[::1]:*"],
+        )
+    else:
+        # LAN bind: Host headers vary (IP, mDNS name); the bearer token is
+        # the real gate, and requires_auth() refuses token-less LAN binds.
+        security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False)
+    app = mcp.streamable_http_app(host=host, transport_security=security)
+    if require:
+        app = _bearer_middleware(app, token)
+    print(f"sims4-tc-mcp: streamable-http on {host}:{port}/mcp "
+          f"(auth={'bearer' if require else 'none'})")
+    import uvicorn
+    uvicorn.run(app, host=host, port=port,
+                log_level=mcp.settings.log_level.lower())
+
+
 def main() -> None:
-    mcp.run(transport="stdio")
+    transport = config.transport()
+    if transport == "streamable-http":
+        run_http()
+    elif transport == "sse":
+        mcp.run(transport="sse", host=config.http_host(),
+                port=config.http_port())
+    else:
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

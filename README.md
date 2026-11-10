@@ -30,7 +30,7 @@ pip install --user uv          # or: curl -LsSf https://astral.sh/uv/install.sh 
 
 cd Sims4Modding
 uv sync                        # creates .venv with Python 3.12
-uv run pytest                  # 86 tests
+uv run pytest                  # 92 tests
 uv run sims4-tc-mcp            # stdio MCP server
 ```
 
@@ -47,6 +47,32 @@ that need an index report `unconfigured` with a hint instead of failing.
 | `SIMS4_TDESC_DIR` | Extracted `.tdesc` schema files |
 | `SIMS4_DECOMPILED_SCRIPTS_DIR` | Decompiled game Python (`base`, `core`, `simulation`, `protocolbuffers`) |
 | `SIMS4_MCP_CACHE_DIR` | Override the SQLite cache root (default `~/.cache/sims4-tc-mcp`) |
+| `SIMS4_MCP_TRANSPORT` | `stdio` (default), `streamable-http` or `sse` |
+| `SIMS4_MCP_HOST` / `SIMS4_MCP_PORT` | HTTP bind (default `127.0.0.1:7348`) |
+| `SIMS4_MCP_AUTH_TOKEN` | Bearer token; **required** for any non-loopback bind |
+
+## Running the server on the game machine (remote MCP)
+
+Keep the game files on the desktop and connect from another machine:
+
+```bash
+# on the game machine
+SIMS4_MCP_TRANSPORT=streamable-http \
+SIMS4_MCP_HOST=0.0.0.0 SIMS4_MCP_PORT=7348 \
+SIMS4_MCP_AUTH_TOKEN="$(openssl rand -hex 24)" \
+SIMS4_USER_DIR="$HOME/.local/share/feral-interactive/TheSims4/VFS/Prefs/Electronic Arts/The Sims 4" \
+uv run sims4-tc-mcp
+```
+
+Safety rules built in: binding a LAN interface without a token **refuses
+to start**; loopback binds may run token-less. Open the port in the
+desktop firewall (`sudo firewall-cmd --add-port=7348/tcp --permanent &&
+sudo firewall-cmd --reload` on Fedora). For Proton installs the user dir
+lives under the launcher's prefix (`feral-interactive` above for the
+native launcher, `~/.steam/root/compatibilitytools.d/.../drive_c/users/
+steamuser/Documents/Electronic Arts/The Sims 4` for Steam Play — check
+with `find ~ -type d -name "The Sims 4" 2>/dev/null`).
+
 
 Build the indexes once the data is available:
 
@@ -56,29 +82,40 @@ Build the indexes once the data is available:
 
 ## OpenCode configuration
 
-`opencode.jsonc` (project root or `~/.config/opencode/opencode.jsonc`):
+`opencode.jsonc` (project root or `~/.config/opencode/opencode.jsonc`).
+Servers go under `mcp.servers`:
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "sims4-tc-mcp": {
-      "type": "local",
-      "command": [
-        "uv", "run", "--directory", "/home/baris/Sims4Modding", "sims4-tc-mcp"
-      ],
-      "environment": {
-        "SIMS4_EXTRACTED_TUNING_DIR": "~/sims4/extracted/tuning",
-        "SIMS4_TDESC_DIR": "~/sims4/extracted/tdesc",
-        "SIMS4_DECOMPILED_SCRIPTS_DIR": "~/sims4/decompiled",
-        "SIMS4_USER_DIR": "~/Documents/Electronic Arts/The Sims 4",
-        "SIMS4_MODS_DIR": "~/Documents/Electronic Arts/The Sims 4/Mods"
+    "servers": {
+      // local stdio variant (server on the same machine)
+      "sims4-tc-mcp": {
+        "type": "local",
+        "command": [
+          "uv", "run", "--directory", "/home/baris/Sims4Modding", "sims4-tc-mcp"
+        ],
+        "environment": {
+          "SIMS4_EXTRACTED_TUNING_DIR": "~/sims4/extracted/tuning",
+          "SIMS4_TDESC_DIR": "~/sims4/extracted/tdesc",
+          "SIMS4_DECOMPILED_SCRIPTS_DIR": "~/sims4/decompiled",
+          "SIMS4_USER_DIR": "~/Documents/Electronic Arts/The Sims 4",
+          "SIMS4_MODS_DIR": "~/Documents/Electronic Arts/The Sims 4/Mods"
+        }
       },
-      "enabled": true
+      // remote variant (server on the game desktop, client elsewhere)
+      "sims4-tc-mcp-remote": {
+        "type": "remote",
+        "url": "http://192.168.1.3:7348/mcp",
+        "headers": { "Authorization": "Bearer <token>" },
+        "timeout": { "startup": 15000 }
+      }
     }
   }
 }
 ```
+
 
 ## Tools
 
@@ -136,7 +173,7 @@ build_package("/path/MyMod.package", "/path/project")
 ## Tests
 
 ```bash
-uv run pytest -q          # 86 tests
+uv run pytest -q          # 92 tests
 uv run pytest -v tests/test_dbpf.py
 ```
 
