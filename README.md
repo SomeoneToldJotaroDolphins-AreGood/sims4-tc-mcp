@@ -1,5 +1,7 @@
 # sims4-tc-mcp
 
+Disclaimer: This is a vibecoded project 
+
 A **Model Context Protocol** server for building, inspecting, packaging and
 debugging **script mods (`.ts4script`)** and **total conversions** for
 *The Sims 4*.
