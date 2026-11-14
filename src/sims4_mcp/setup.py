@@ -395,6 +395,7 @@ def install_launcher() -> Path:
 
 
 def summary(config: dict) -> str:
+    """Plain-text variant of :func:`_print_summary` (logs, non-TTY use)."""
     paths = config.get("paths", {})
     lines = [
         f"config : {CONFIG_FILE}",
@@ -413,17 +414,66 @@ def summary(config: dict) -> str:
               json.dumps(client_snippet(config), indent=2)]
     return "\n".join(lines)
 
+def _print_summary(console, config: dict) -> None:
+    """Pretty version of :func:`summary` for terminals."""
+    from rich.panel import Panel
+    from rich.text import Text
+
+    _tui_banner(console)
+    console.print()
+    _dashboard(console, config)
+
+    missing = [k for k in _PATH_KEYS if not config.get("paths", {}).get(k)]
+    if missing:
+        hint = Text()
+        hint.append("tip  ", style="bold yellow")
+        hint.append("--user-dir / --tuning-dir / --tdesc-dir / --scripts-dir "
+                    "override what was not detected", style="dim")
+        console.print(hint)
+        console.print()
+
+    snippet = json.dumps(client_snippet(config), indent=2)
+    console.print(Panel(snippet, title="client config · merge under mcp.servers",
+                        border_style="cyan", padding=(0, 1)))
+    where = Text()
+    where.append("config  ", style="dim")
+    where.append(str(CONFIG_FILE), style="dim")
+    where.append("\n")
+    where.append("token   ", style="dim")
+    where.append(str(TOKEN_FILE), style="dim")
+    console.print(where)
+    console.print()
+    footer = Text()
+    footer.append("next  ", style="bold cyan")
+    footer.append("sims4-tc-mcp-setup --tui", style="")
+    footer.append("  ·  ", style="dim")
+    footer.append("--service", style="")
+    footer.append("  ·  ", style="dim")
+    footer.append("--launcher", style="")
+    console.print(footer)
+
 
 def status() -> int:
+    from rich.console import Console
+
     if not CONFIG_FILE.exists():
         print(f"not configured yet ({CONFIG_FILE} missing)")
         print("run: uv run sims4-tc-mcp-setup")
         return 1
     config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-    print(summary(config))
-    state = ("running" if is_listening(int(config["port"]))
-             else "not running")
-    print(f"\nserver : {state} on port {config['port']}")
+    console = Console()
+    _tui_banner(console)
+    console.print()
+    _dashboard(console, config)
+    from rich.text import Text
+    state = Text()
+    state.append("● ", style="bold green"
+                 if is_listening(int(config["port"])) else "bold red")
+    state.append("running" if is_listening(int(config["port"]))
+                 else "not running")
+    state.append(f" on port {config['port']}", style="dim")
+    console.print()
+    console.print(state)
     return 0
 
 
@@ -652,7 +702,8 @@ def auto(host: str = "0.0.0.0",
     config = _load_or_build(host, overrides)
     write_config(config)
     write_env_file(config)
-    print(summary(config), flush=True)
+    from rich.console import Console
+    _print_summary(Console(), config)
 
     if shutil.which("systemctl"):
         install_service(config)
@@ -735,22 +786,24 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(client_snippet(config), indent=2), flush=True)
         return 0
 
-    print(summary(config), flush=True)
+    from rich.console import Console
+    console = Console()
+    _print_summary(console, config)
 
     if args.service:
-        print(f"\nservice: {install_service(config)}", flush=True)
+        console.print(f"[green]service:[/green] {install_service(config)}")
     if args.launcher:
-        print(f"launcher: {install_launcher()}", flush=True)
+        console.print(f"[green]launcher:[/green] {install_launcher()}")
 
     if args.service:
-        print("\ninstalled; manage with:", flush=True)
-        print(f"  systemctl --user status {APP_NAME}", flush=True)
-        print(f"  journalctl --user -u {APP_NAME} -f", flush=True)
+        console.print("\ninstalled; manage with:")
+        console.print(f"  systemctl --user status {APP_NAME}")
+        console.print(f"  journalctl --user -u {APP_NAME} -f")
         return 0
 
     from . import server
 
-    print("\nstarting server (Ctrl+C to stop)…", flush=True)
+    console.print("\n[dim]starting server (Ctrl+C to stop)…[/dim]")
     server.run_http()
     return 0
 
