@@ -456,22 +456,103 @@ def _load_or_build(host: str = "0.0.0.0",
     return config
 
 
+_TUI_ART = (
+    "███████╗██╗███╗   ███╗███████╗    ██╗",
+    "██╔════╝██║████╗ ████║██╔════╝   ███║",
+    "███████╗██║██╔████╔██║███████╗   ╚██║",
+    "╚════██║██║██║╚██╔╝██║╚════██║    ██║",
+    "███████║██║██║ ╚═╝ ██║███████║    ██║",
+    "╚══════╝╚═╝╚═╝     ╚═╝╚══════╝    ╚═╝",
+)
+
+
+def _tui_banner(console) -> None:
+    from rich.text import Text
+
+    width = max(len(line) for line in _TUI_ART) + 4
+    console.print(Text("╭" + "─" * width + "╮", style="cyan"))
+    for line in _TUI_ART:
+        console.print(Text("│ " + line.ljust(width - 2) + " │", style="cyan"))
+    console.print(Text("│ " + "M C P   S E R V E R".ljust(width - 2) + " │",
+                       style="bold green"))
+    console.print(Text("╰" + "─" * width + "╯", style="cyan"))
+    console.print(Text("  build · inspect · debug Sims 4 mods over MCP",
+                       style="dim"))
+
+
+_PATH_LABELS = {
+    "SIMS4_USER_DIR": "user folder",
+    "SIMS4_MODS_DIR": "mods",
+    "SIMS4_EXTRACTED_TUNING_DIR": "tuning xml",
+    "SIMS4_TDESC_DIR": "tdesc",
+    "SIMS4_DECOMPILED_SCRIPTS_DIR": "decompiled",
+}
+
+
+def _short(path: str, limit: int = 32) -> str:
+    return path if len(path) <= limit else "…" + path[-(limit - 1):]
+
+
 def _dashboard(console, config: dict) -> None:
+    from rich.panel import Panel
     from rich.table import Table
+    from rich.text import Text
 
     paths = config.get("paths", {})
-    table = Table(show_header=False, box=None, padding=(0, 1))
-    table.add_column(style="bold cyan", no_wrap=True)
-    table.add_column(overflow="ellipsis", max_width=56)
-    url = f"http://{lan_ip() or '127.0.0.1'}:{config['port']}/mcp"
     running = is_listening(int(config["port"]))
-    table.add_row("server", f"[green]running[/green]  {url}"
-                  if running else f"[yellow]stopped[/yellow]  {url}")
-    for key in _PATH_KEYS:
+    url = f"http://{lan_ip() or '127.0.0.1'}:{config['port']}/mcp"
+
+    server = Text()
+    server.append("● ", style="bold green" if running else "bold red")
+    server.append("running" if running else "stopped",
+                  style="green" if running else "red")
+    server.append(f"   port {config['port']}\n", style="dim")
+    server.append(url + "\n", style="cyan")
+    server.append("token  ", style="dim")
+    server.append(_short(str(TOKEN_FILE), 22), style="dim")
+
+    # Keep the right column from wrapping: the panel takes 3/5 of the width.
+    limit = max(16, int(console.width * 0.60) - 26)
+    data = Text()
+    keys = list(_PATH_KEYS)
+    for index, key in enumerate(keys):
         value = paths.get(key)
-        table.add_row(key.replace("SIMS4_", "").lower(),
-                      value or "[dim]not found[/dim]")
-    table.add_row("token", str(TOKEN_FILE))
+        found = bool(value)
+        data.append("✓ " if found else "— ",
+                    style="green" if found else "yellow")
+        data.append(_PATH_LABELS.get(key, key).ljust(12), style="bold")
+        data.append((_short(value, limit) if value else "not found"),
+                    style="" if found else "dim")
+        if index < len(keys) - 1:
+            data.append("\n")
+
+    grid = Table.grid(expand=True, padding=(0, 1))
+    grid.add_column(ratio=2)
+    grid.add_column(ratio=3)
+    grid.add_row(
+        Panel(server, title="server", border_style="cyan", padding=(0, 1)),
+        Panel(data, title="game data", border_style="cyan", padding=(0, 1)),
+    )
+    console.print(grid)
+
+
+def _menu(console) -> None:
+    from rich.table import Table
+
+    items = [
+        ("1", "Start server now", "5", "Show client config"),
+        ("2", "Install background service", "6", "Add desktop icon"),
+        ("3", "Re-detect game folders", "7", "Stop background service"),
+        ("4", "Change port", "8", "Extract tuning + TDESC  (ts4-extract)"),
+        ("q", "Quit", "", ""),
+    ]
+    table = Table.grid(padding=(0, 1))
+    table.add_column(justify="right", style="bold cyan", width=1)
+    table.add_column(width=29)
+    table.add_column(justify="right", style="bold cyan", width=1)
+    table.add_column(width=38)
+    for left_num, left, right_num, right in items:
+        table.add_row(left_num, left, right_num, right)
     console.print(table)
 
 
@@ -479,7 +560,6 @@ def tui(host: str = "0.0.0.0",
         overrides: dict[str, str | None] | None = None) -> int:
     """Interactive menu for non-technical users."""
     from rich.console import Console
-    from rich.panel import Panel
     from rich.prompt import Prompt
 
     console = Console()
@@ -489,22 +569,12 @@ def tui(host: str = "0.0.0.0",
     while True:
         if console.is_terminal:
             console.clear()
-        console.print(Panel.fit(
-            "[bold]Sims 4 MCP Server[/bold]\n"
-            "Build, inspect and debug Sims 4 mods over MCP.",
-            border_style="cyan"))
+        _tui_banner(console)
+        console.print()
         _dashboard(console, config)
-        console.print(
-            "\n[bold]1[/bold] Start server now      "
-            "[bold]2[/bold] Install background service\n"
-            "[bold]3[/bold] Re-detect game folders "
-            "[bold]4[/bold] Change port\n"
-            "[bold]5[/bold] Show client config    "
-            "[bold]6[/bold] Add desktop icon\n"
-            "[bold]7[/bold] Stop background service "
-            "[bold]8[/bold] Extract tuning + TDESC (ts4-extract)\n"
-            "[bold]q[/bold] Quit")
-
+        console.print()
+        _menu(console)
+        console.print()
         choice = Prompt.ask("Choose", choices=choices, default="1")
 
         if choice == "q":
