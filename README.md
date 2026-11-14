@@ -79,6 +79,21 @@ It also picks up `~/sims4/extracted/tuning`, `~/sims4/extracted/tdesc` and
 `~/sims4/decompiled` when they exist. Anything missing can be overridden
 with `--user-dir/--mods-dir/--tuning-dir/--tdesc-dir/--scripts-dir`.
 
+### Extract the vanilla corpora
+
+The tuning + TDESC indexes need game files dumped to disk. The companion
+[`ts4-extract`](https://github.com/SomeoneToldJotaroDolphins-AreGood/ts4-extract)
+does that without launching the game:
+
+```bash
+uv run --directory ~/Projects/ts4-extract ts4-extract
+```
+
+Its defaults are exactly the folders this setup auto-detects. The TUI has a
+one-key shortcut for it — **8 Extract tuning + TDESC** — and the same step is
+available non-interactively with `sims4-tc-mcp-setup --extract`. After it
+finishes, run `rebuild_indexes(tuning=true, tdesc=true)` from your MCP client.
+
 Settings live in `~/.config/sims4-tc-mcp/config.json` (mode 0600) with the
 token in `~/.config/sims4-tc-mcp/token`. Environment variables still take
 precedence, so containers and CI keep working.

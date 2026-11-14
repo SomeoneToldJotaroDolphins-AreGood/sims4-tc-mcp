@@ -182,3 +182,27 @@ def test_setup_main_writes_config(sandbox, monkeypatch):
 def test_status_without_config(sandbox, capsys):
     assert setup.status() == 1
     assert "not configured" in capsys.readouterr().out
+
+
+def test_extractor_command_prefers_path(monkeypatch, tmp_path):
+    monkeypatch.setattr(setup.shutil, "which",
+                        lambda name: "/usr/bin/ts4-extract"
+                        if name == "ts4-extract" else None)
+    assert setup.extractor_command() == ["/usr/bin/ts4-extract"]
+
+
+def test_extractor_command_falls_back_to_checkout(monkeypatch, tmp_path):
+    monkeypatch.setattr(setup.shutil, "which", lambda name: None)
+    monkeypatch.setattr(setup, "EXTRACTOR_DEFAULT_CHECKOUT", tmp_path)
+    (tmp_path / "pyproject.toml").write_text("[project]\n")
+    command = setup.extractor_command()
+    assert command and command[-1] == "ts4-extract"
+    assert "run" in command
+
+
+def test_extractor_command_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(setup.shutil, "which", lambda name: None)
+    monkeypatch.delenv("TS4_EXTRACT_DIR", raising=False)
+    monkeypatch.setattr(setup, "EXTRACTOR_DEFAULT_CHECKOUT",
+                        tmp_path / "missing")
+    assert setup.extractor_command() is None

@@ -129,6 +129,49 @@ def detect_scripts_dir() -> Path | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Companion extractor (ts4-extract)
+# ---------------------------------------------------------------------------
+
+EXTRACTOR_NAME = "ts4-extract"
+EXTRACTOR_DEFAULT_CHECKOUT = Path.home() / "Projects" / "ts4-extract"
+
+
+def extractor_command() -> list[str] | None:
+    """How to invoke the companion extractor, if it is available.
+
+    Order: a ``ts4-extract`` on PATH, then a checkout pointed at by
+    ``TS4_EXTRACT_DIR``, then the default ``~/Projects/ts4-extract``
+    checkout run through ``uv``.
+    """
+    exe = shutil.which(EXTRACTOR_NAME)
+    if exe:
+        return [exe]
+    candidates = []
+    env = os.environ.get("TS4_EXTRACT_DIR", "").strip()
+    if env:
+        candidates.append(Path(env).expanduser())
+    candidates.append(EXTRACTOR_DEFAULT_CHECKOUT)
+    for candidate in candidates:
+        if (candidate / "pyproject.toml").is_file():
+            return [uv_binary(), "run", "--directory", str(candidate),
+                    EXTRACTOR_NAME]
+    return None
+
+
+def extract_game_data() -> int:
+    """Run the extractor to (re)build the tuning + TDESC corpora."""
+    command = extractor_command()
+    if command is None:
+        print("ts4-extract was not found.\n"
+              "Install it from "
+              "https://github.com/SomeoneToldJotaroDolphins-AreGood/"
+              "ts4-extract (or set TS4_EXTRACT_DIR to its checkout).")
+        return 1
+    print(f"running: {' '.join(command)}", flush=True)
+    return subprocess.run(command, check=False).returncode
+
+
 def detect_paths() -> dict[str, str | None]:
     user = detect_user_dir()
     return {
@@ -441,7 +484,7 @@ def tui(host: str = "0.0.0.0",
 
     console = Console()
     config = _load_or_build(host, overrides)
-    choices = ["1", "2", "3", "4", "5", "6", "7", "q"]
+    choices = ["1", "2", "3", "4", "5", "6", "7", "8", "q"]
 
     while True:
         if console.is_terminal:
@@ -459,6 +502,7 @@ def tui(host: str = "0.0.0.0",
             "[bold]5[/bold] Show client config    "
             "[bold]6[/bold] Add desktop icon\n"
             "[bold]7[/bold] Stop background service "
+            "[bold]8[/bold] Extract tuning + TDESC (ts4-extract)\n"
             "[bold]q[/bold] Quit")
 
         choice = Prompt.ask("Choose", choices=choices, default="1")
@@ -503,6 +547,18 @@ def tui(host: str = "0.0.0.0",
         elif choice == "7":
             stop_service()
             console.print("[green]service stopped.[/green]")
+        elif choice == "8":
+            code = extract_game_data()
+            if code == 0:
+                config["paths"] = detect_paths()
+                write_config(config)
+                write_env_file(config)
+                console.print("[green]extracted; detected paths refreshed.[/green]")
+                console.print("[dim]rebuild_indexes(tuning=true, tdesc=true) "
+                              "in your MCP client to search them.[/dim]")
+            else:
+                console.print("[yellow]extractor did not finish cleanly "
+                              f"(exit {code}).[/yellow]")
         Prompt.ask("Press Enter", default="", show_default=False)
 
 
@@ -558,6 +614,9 @@ def _parser() -> argparse.ArgumentParser:
                         help="install + enable a systemd user service")
     parser.add_argument("--launcher", action="store_true",
                         help="install a desktop launcher for one-click start")
+    parser.add_argument("--extract", action="store_true",
+                        help="run ts4-extract to rebuild the tuning + TDESC "
+                             "corpora before starting")
     parser.add_argument("--status", action="store_true",
                         help="show detection + running state, then exit")
     parser.add_argument("--print-client-config", action="store_true",
@@ -585,6 +644,13 @@ def main(argv: list[str] | None = None) -> int:
     }
     if args.status:
         return status()
+    if args.extract:
+        code = extract_game_data()
+        if code != 0:
+            print(f"extractor exited with {code}", flush=True)
+        for key, value in detect_paths().items():
+            if value and not overrides.get(key):
+                overrides[key] = value
     if args.tui:
         return tui(host=args.host, overrides=overrides)
     if args.auto:
